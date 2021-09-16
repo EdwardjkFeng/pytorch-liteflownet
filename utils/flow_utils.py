@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import os.path
+import cv2
 
 TAG_CHAR = np.array([202021.25], np.float32)
 
@@ -61,15 +62,32 @@ def writeFlow(filename, uv, v=None):
 
 # ref: https://github.com/sampepose/flownet2-tf/
 # blob/18f87081db44939414fc4a48834f9e0da3e69f4c/src/flowlib.py#L240
-def visulize_flow_file(flow_filename, save_dir=None):
+# modified accordingly based on the project
+def visualize_flow_file(flow_filename, save_dir=None, format='middlebury', resize=False, origin_size=None):
     # print(flow_filename)  # Debug
     flow_data = readFlow(flow_filename)
-    img = flow2img(flow_data)
-    # plt.imshow(img)
-    # plt.show()
+
+    if format == 'middlebury':
+        img = flow2img(flow_data)
+
+        if resize & (origin_size is not None):
+            img = cv2.resize(img, origin_size)
+
+    elif format == 'kitti':
+        # print(flow_data.shape[1], '/', origin_size[0])
+        # print(flow_data.shape[0], '/', origin_size[1])
+        flow_data[:, :, 0] /= float(flow_data.shape[1] / origin_size[0])
+        flow_data[:, :, 1] /= float(flow_data.shape[0] / origin_size[1])
+        img = flow_to_png_kitti(flow_data)
+
+        if resize & (origin_size is not None):
+            img = cv2.resize(img, origin_size)
+
     if save_dir:
         idx = flow_filename.rfind("/") + 1
-        plt.imsave(os.path.join(save_dir, "%s-vis.png" % flow_filename[idx:-4]), img)
+        # plt.imsave(os.path.join(save_dir, "%s_10.png" % flow_filename[idx:-4]), img)
+        # cv2.imwrite(os.path.join(save_dir, "%s_10.png" % flow_filename[idx:-4]), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+        cv2.imwrite(os.path.join(save_dir, "%s_10.png" % flow_filename[idx:-4]), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
 
 def flow2img(flow_data):
@@ -205,3 +223,80 @@ def make_color_wheel():
     colorwheel[col:col + MR, 0] = 255
 
     return colorwheel
+
+
+def flow_to_png_kitti(flow_data):
+    """ Convert flo file to png file required by KITTI evaluation
+
+    Arg:
+        flow (np.array [h, w, 2]): 2-band float image for horizontal (u) and vertical (v) flow components
+
+    Returns:
+        flow_image (np.array [h, w, 3]): optical flow maps as 3-channel uint16 array with the first channel contains
+        u-component, the second channel the v-component and the third channel denotes if the pixel is valid or not (1 if
+        true, 0 otherwise).
+    """
+    flow_image = np.zeros((flow_data.shape[0], flow_data.shape[1], 3), dtype=np.uint16)
+    # flow[:, :, 0] = flow[:, :, 0].astype(np.float32) * float(64.0) + float(32768.0)
+    # flow[:, :, 1] = flow[:, :, 1].astype(np.float32) * float(64.0) + float(32768.0)
+    # valid = is_valid(flow[:, :, 0], flow[:, :, 1])
+    u = flow_data[:, :, 0]
+    v = flow_data[:, :, 1]
+    UNKNOW_FLOW_THRESHOLD = 1e7
+    pr1 = abs(u) > UNKNOW_FLOW_THRESHOLD
+    pr2 = abs(v) > UNKNOW_FLOW_THRESHOLD
+    idx_unknown = (pr1 | pr2)
+
+    flow_image[:, :, 2] = is_valid(u, v).astype(np.uint16)
+    flow_image[:, :, 2][idx_unknown] = 0
+
+    flow_image[:, :, 0] = u.astype(np.float32) * float(64.0) + float(32768.0)
+    flow_image[:, :, 1] = v.astype(np.float32) * float(64.0) + float(32768.0)
+    return flow_image
+
+
+def is_valid(u, v):
+    """ Check if optical flow at given pixel is valid
+
+    Arg:
+        u (np.array [h, w, 1]): u-component of optical flow
+        v (np.array [h, w, 1]): v-component of optical flow
+
+    Returns:
+        valid (np.array [h, w, 1]): denotes if the pixel is valid or not
+    """
+    assert u.shape == v.shape
+    height, width,  = u.shape
+    valid = np.ones((height, width))
+
+    return valid
+
+
+def uv_flow_to_float(flow_data):
+    u = flow_data[:, :, 0]
+    v = flow_data[:, :, 1]
+    flow_float = np.zeros((u.shape[0], u.shape[1], 2), dtype=np.float32)
+    flow_float[:, :, 0] = (u.astype(np.float64) - float(32768.0)) / float(64.0)
+    flow_float[:, :, 1] = (v.astype(np.float64) - float(32768.0)) / float(64.0)
+
+    return flow_float
+
+
+# fn = readFlow("../test.flo")
+# flow_uint16 = flow_to_png_kitti(fn)
+# flow_float = uv_flow_to_float(flow_uint16)
+# print(flow_float.dtype)
+# cv2.imshow('uint16 map', flow_uint16[:, :, ::-1])
+# img = flow2img(flow_float)
+# img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+# cv2.imshow('Color_map', img)
+
+
+# visualize_flow_file("/home/jingkun/SemesterProject/pytorch-liteflownet/results/kitti_odom_optflo/training/flo/000000.flo",
+#                     save_dir='../', format='kitti', resize=True,
+#                     origin_size=(1242, 375))
+# flow_uint16 = cv2.imread('../000000_10.png', cv2.IMREAD_UNCHANGED)
+# print(flow_uint16[:, :, 0])
+# cv2.imshow("flow", flow_uint16)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()

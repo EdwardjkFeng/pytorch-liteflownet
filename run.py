@@ -9,19 +9,20 @@ import os
 import PIL
 import PIL.Image
 import sys
+import time
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from utils.flow_utils import visulize_flow_file
-from utils.load_data import get_image
-from utils.load_data import show_results
+from utils.flow_utils import visualize_flow_file
+from utils.load_data import *
 
 # check if GPU is available
-print('Cuda is available:', torch.cuda.is_available())
+print('Cuda is available:', torch.cuda.is_available(),
+      'Using', torch.cuda.get_device_name(torch.cuda.current_device()))
 
 try:
     from .correlation import correlation  # the custom cost volume layer
 except:
-    sys.path.insert(0, './correlation');
+    sys.path.insert(0, './correlation')
     import correlation  # you should consider upgrading python
 # end
 
@@ -40,11 +41,15 @@ arguments_strModel = 'kitti'  # 'default', or 'kitti', or 'sintel'
 # arguments_strTwo = './images/frame01.png'
 # arguments_strOut = './out_backward.flo'
 
-arguments_strImgDir = '/dataset/kitti_odom_gray/00/image_0/'
-arguments_strImgOut = os.path.dirname(os.path.abspath(__file__)) + "/results/kitti_odom_gray_00/"
+dataset_dir = '/dataset/'
+dataset_name = 'kitti_odom_optflo/'
+img_seq = 'training/'
+cam = 'image_2/'
+arguments_strImgDir = dataset_dir + dataset_name + img_seq + cam
+arguments_strImgOut = "/results/" + dataset_name + img_seq
 
 for strOption, strArgument in \
-getopt.getopt(sys.argv[1:], '', [strParameter[2:] + '=' for strParameter in sys.argv[1::2]])[0]:
+        getopt.getopt(sys.argv[1:], '', [strParameter[2:] + '=' for strParameter in sys.argv[1::2]])[0]:
     if strOption == '--model' and strArgument != '': arguments_strModel = strArgument  # which model to use
     if strOption == '--one' and strArgument != '': arguments_strOne = strArgument  # path to the first frame
     if strOption == '--two' and strArgument != '': arguments_strTwo = strArgument  # path to the second frame
@@ -381,10 +386,10 @@ class Network(torch.nn.Module):
 
         for intLevel in [1, 2, 3, 4, 5]:
             tenOne.append(torch.nn.functional.interpolate(input=tenOne[-1], size=(
-            tenFeaturesOne[intLevel].shape[2], tenFeaturesOne[intLevel].shape[3]), mode='bilinear',
+                tenFeaturesOne[intLevel].shape[2], tenFeaturesOne[intLevel].shape[3]), mode='bilinear',
                                                           align_corners=False))
             tenTwo.append(torch.nn.functional.interpolate(input=tenTwo[-1], size=(
-            tenFeaturesTwo[intLevel].shape[2], tenFeaturesTwo[intLevel].shape[3]), mode='bilinear',
+                tenFeaturesTwo[intLevel].shape[2], tenFeaturesTwo[intLevel].shape[3]), mode='bilinear',
                                                           align_corners=False))
         # end
 
@@ -424,9 +429,9 @@ def estimate(tenOne, tenTwo):
     intHeight = tenOne.shape[1]
 
     assert (
-                intWidth == 1024)  # remember that there is no guarantee for correctness, comment this line out if you acknowledge this and want to continue
+            intWidth == 1024)  # remember that there is no guarantee for correctness, comment this line out if you acknowledge this and want to continue
     assert (
-                intHeight == 436)  # remember that there is no guarantee for correctness, comment this line out if you acknowledge this and want to continue
+            intHeight == 436)  # remember that there is no guarantee for correctness, comment this line out if you acknowledge this and want to continue
 
     tenPreprocessedOne = tenOne.cuda().view(1, 3, intHeight, intWidth)
     tenPreprocessedTwo = tenTwo.cuda().view(1, 3, intHeight, intWidth)
@@ -474,15 +479,21 @@ if __name__ == '__main__':
     # tenTwo[:, :, 2] = tenTwo_gray
 
     # estimation on sequence
-    timestamp = 4540
+    timestamp = 200
 
     sys.stdout.write("[%s]" % (" " * timestamp))
     sys.stdout.flush()
     sys.stdout.write("\b" * (timestamp + 1))
 
+    timer = 0.0
+
     for i in range(timestamp):
-        tenOne = get_image(arguments_strImgDir, i)
-        tenTwo = get_image(arguments_strImgDir, i + 1)
+        # tenOne = get_image(arguments_strImgDir, i)
+        # tenTwo = get_image(arguments_strImgDir, i + 1)
+        tenOne, size_one = get_image_kitti_flow(arguments_strImgDir, 0, i)
+        tenTwo, size_two = get_image_kitti_flow(arguments_strImgDir, 1, i)
+
+        start_time = time.time()
 
         tenOne = torch.FloatTensor(
             numpy.ascontiguousarray(tenOne.transpose(2, 0, 1).astype(numpy.float32) * (1.0 / 255.0)))
@@ -491,7 +502,13 @@ if __name__ == '__main__':
 
         tenOutput = estimate(tenOne, tenTwo)
 
-        out_file = os.path.join(arguments_strImgOut + "flo/", "{:06d}.{}".format(i, 'flo'))
+        timer += time.time() - start_time
+
+        out_path_flo = os.path.dirname(os.path.abspath(__file__)) + arguments_strImgOut + "flo/"
+        make_dir_if_not_exist(out_path_flo)
+
+        out_file = os.path.join(out_path_flo, "{:06d}.{}".format(i, 'flo'))
+
         objOutput = open(out_file, 'wb')
 
         numpy.array([80, 73, 69, 72], numpy.uint8).tofile(objOutput)
@@ -501,8 +518,9 @@ if __name__ == '__main__':
         objOutput.close()
 
         # visualize resutls
-        vis_save_dir = os.path.join(arguments_strImgOut, "vis/")
-        visulize_flow_file(out_file, save_dir=vis_save_dir)
+        vis_save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)) + arguments_strImgOut, "vis/")
+        make_dir_if_not_exist(vis_save_dir)
+        visualize_flow_file(out_file, save_dir=vis_save_dir, resize=True, format='kitti', origin_size=size_one)
 
         progress = i / (timestamp - 1)
         block = int(round(100 * progress))
@@ -511,6 +529,12 @@ if __name__ == '__main__':
         sys.stdout.flush()
 
     # generate video of results
-    # show_results(os.path.join(arguments_strImgOut, "vis/"))
+    # generate_video = True
+    # if generate_video:
+    #     generate_video_compare(arguments_strImgDir, arguments_strImgOut, timestamp)
+
     sys.stdout.write(" Done!\n")
+    print("Total time for estimation: %lf" % timer)
+    print("Average time for estimating one frame %lf" % (timer / timestamp))
+
 # end
