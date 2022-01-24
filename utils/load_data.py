@@ -57,15 +57,14 @@ def get_image_euroc(img_path):
     """
     img = PIL.Image.open(img_path)
     origin_size = img.size
-    img.resize((1024, 436))
+    # img = img.resize((1024, 436))
     gray = np.array(img)
-    print(gray)
-    im = np.zeros((436, 1024, 3))
+    im = np.zeros((img.size[1], img.size[0], 3))
     im[:, :, 0] = gray
     im[:, :, 1] = gray
     im[:, :, 2] = gray
 
-    return im
+    return im, origin_size
 
 
 def get_image_kitti_flow(img_dir, frame, timestamp):
@@ -116,20 +115,26 @@ def generate_video_result(results_dir, res_path, timestamp):
     out.release()
 
 
-def generate_video_compare(raw_dir, results_dir, timestamp):
-    frame_size = (1024 * 2, 436)
+def generate_video_compare(raw_dir, results_dir):
+    raw_dir_abs = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + raw_dir
+    res_dir_abs = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + results_dir
+    raw_paths = sorted(glob.glob(raw_dir_abs + '*.png'))
+    res_paths = sorted(glob.glob(res_dir_abs + '*.png'))
 
-    out = cv2.VideoWriter(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + results_dir +
-                          'videos/result_video.avi',
-                          cv2.VideoWriter_fourcc(*'mp4v'), 60, frame_size)
+    raw_height, raw_width, raw_channel = cv2.imread(raw_paths[0]).shape
+    res_height, res_width, res_channel = cv2.imread(res_paths[0]).shape
 
-    for i in range(timestamp):
+    assert (raw_width == res_width) & (raw_height == res_height)
+
+    make_dir_if_not_exist(res_dir_abs + 'videos/')
+    out = cv2.VideoWriter(res_dir_abs + 'videos/result_video.avi',
+                          cv2.VideoWriter_fourcc(*'mp4v'), 60, (raw_width * 2, raw_height))
+
+    for i in range(len(raw_paths) - 1):
 
         # img_raw = np.uint8(get_image(raw_dir, i))
-        img_raw = cv2.imread(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + raw_dir +
-                                          "{:06d}_10.{}".format(i, img_ext)), cv2.IMREAD_UNCHANGED)
-        img_res = cv2.imread(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + results_dir +
-                                          "{:06d}_10.{}".format(i, img_ext)), cv2.IMREAD_UNCHANGED)
+        img_raw = cv2.imread(raw_paths[i])
+        img_res = cv2.imread(res_paths[i], cv2.IMREAD_UNCHANGED)
 
         both = np.concatenate((img_raw, img_res), axis=1)
 
@@ -156,3 +161,5 @@ def generate_video_compare(raw_dir, results_dir, timestamp):
 # cv2.destroyAllWindows()
 # generate_video_result('/results/evaluate01/data/flow/', '/results/evaluate01/', 200)
 # generate_video_compare('/dataset/kitti_odom_optflo/training/flow_noc/', '/results/evaluate01/data/flow/', 200)
+# get_image_euroc('/home/jingkun/SemesterProject/pytorch-liteflownet/dataset/euroc/MH_04_difficult/mav0/cam0/data/1403638127245096960.png')
+# generate_video_compare('/dataset/euroc/MH_04_difficult/mav0/cam0/data/', '/results/euroc/MH_04_difficult/mav0/vis/')

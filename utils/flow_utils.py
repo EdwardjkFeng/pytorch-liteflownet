@@ -87,7 +87,7 @@ def visualize_flow_file(flow_filename, save_dir=None, format='middlebury', resiz
         idx = flow_filename.rfind("/") + 1
         # plt.imsave(os.path.join(save_dir, "%s_10.png" % flow_filename[idx:-4]), img)
         # cv2.imwrite(os.path.join(save_dir, "%s_10.png" % flow_filename[idx:-4]), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-        cv2.imwrite(os.path.join(save_dir, "%s_10.png" % flow_filename[idx:-4]), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+        cv2.imwrite(os.path.join(save_dir, "%s.png" % flow_filename[idx:-4]), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
 
 def flow2img(flow_data):
@@ -300,3 +300,79 @@ def uv_flow_to_float(flow_data):
 # cv2.imshow("flow", flow_uint16)
 # cv2.waitKey(0)
 # cv2.destroyAllWindows()
+# flow_data = readFlow("/home/jingkun/SemesterProject/pytorch-liteflownet/results/euroc/MH_05_difficult/mav0/cam0/flo/1403638518077829376.flo")
+# flow_data = readFlow('/home/jingkun/SemesterProject/pytorch-liteflownet/images/flo/frame01.flo')
+# u = np.array(flow_data[:, :, 0])
+# v = np.array(flow_data[:, :, 1])
+# print(u.shape)
+# # To normalize the flow data
+# flow = np.sqrt(u ** 2 + v ** 2)
+# normalized_flow = flow / np.max(flow)
+# normalized_flow *= 255
+# print(normalized_flow)
+# cv2.imshow('normalized flow', normalized_flow.astype(np.uint8))
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
+
+
+# import glob
+#
+# path = '../images/flo/' + '*.flo'
+# flo_path = sorted(glob.glob(path))
+#
+# for flo in flo_path:
+#     flo_mat = cv2.readOpticalFlow(flo)
+#     u = np.array(flo_mat[:, :, 0])
+#     v = np.array(flo_mat[:, :, 1])
+#     print(u)
+#     print(v)
+#     print(u.shape)
+#     flow = np.sqrt(u ** 2 + v ** 2)
+#     normalized_flow = flow / np.max(flow)
+#     normalized_flow *= 255
+#     print(normalized_flow)
+#     cv2.imshow('normalized flow', normalized_flow.astype(np.uint8))
+#     cv2.waitKey(0)
+#     cv2.destroyAllWindows()
+
+# path_1 = '../images/flo/000486_lr.flo'
+# path_2 = '../images/flo/000486_rl.flo'
+#
+# flow_1_data = cv2.readOpticalFlow(path_1)
+# flow_u1 = np.array(flow_1_data[:, :, 0])
+# flow_v1 = np.array(flow_1_data[:, :, 1])
+# flow_2_data = cv2.readOpticalFlow(path_2)
+# flow_u2 = np.array(flow_2_data[:, :, 0])
+# flow_v2 = np.array(flow_2_data[:, :, 1])
+# row, col, _ = flow_1_data.shape
+# val_flo = 0
+# val_track = 0
+# reproject_error_2 = 0
+# for r in range(row):
+#     for c in range(col):
+#         u = flow_u1[r, c]
+#         v = flow_v1[r, c]
+#         if (r + v < row) & (c + u < col) & (r + v > 0) & (c + u > 0):
+#             val_flo += 1
+#             inv_u = flow_u2[int(r + v), int(c + u)]
+#             inv_v = flow_v2[int(r + v), int(c + u)]
+#             print(u, v, inv_u, inv_v)
+#             dist = (u + inv_u) ** 2 + (v + inv_v) ** 2
+#             reproject_error_2 += dist
+#             if dist < 0.25:
+#                 val_track += 1
+#
+# print(val_flo / (row * col))
+# print(val_track / (row * col))
+# print(reproject_error_2 / val_flo)
+#
+# flow_u1 = np.zeros(flow_u1.shape, dtype=flow_u1.dtype)
+# flow_v1 = np.zeros(flow_v1.shape, dtype=flow_v1.dtype)
+# print(flow_u1, flow_v1)
+# writeFlow('./000000.flo', flow_u1, flow_v1)
+
+
+# u2 = np.array(flow_2_data[:, :, 0])[148 + int(v1), 81 + int(u1)]
+# v2 = np.array(flow_2_data[:, :, 1])[148 + int(v1), 81 + int(u1)]
+# print('{0:.6f}, {1:.6f}'.format(u1, v1), '{0:.6f}, {1:.6f}'.format(u2, v2))
+# print(((u1 - u2) ** 2 + (v1 - v2) ** 2) < 0.04)
